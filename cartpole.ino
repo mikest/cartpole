@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Estee_TMC5130.h>
+#include <limits.h>
 
 uint8_t TMC_CS = PIN_A5;  // Chip select, Active LOW. next to SCK/MOSI/MISO on the Adafruit Feather M0
 uint8_t TMC_EN = 10;      // Drive enable pin. Active LOW. Optional, you can also just tie to ground
@@ -13,6 +14,9 @@ void setup()
   // init serial coms
   Serial.begin(9600);
   SPI.begin();
+
+  // encoder
+  enc_setup();
 
   // chip select & drive enable
   pinMode(TMC_EN, OUTPUT);
@@ -36,21 +40,23 @@ void setup()
 //  Serial.println(freq);
 //  delay(5000);
 
+  #define ACCEL 15000 * 200
+  #define VELOCITY 5000 * 200
+
   // ramp definition
   uint32_t onerev = 200*256;
+  tmc.writeRegister(XACTUAL, 0);
   tmc.writeRegister(VSTART, 0x0);
-  tmc.writeRegister(A_1, 1000);
-  tmc.writeRegister(V_1, 50000);
-  tmc.writeRegister(AMAX, 500);
-  tmc.writeRegister(VMAX, 200000);
-  tmc.writeRegister(DMAX, 700);
-  tmc.writeRegister(D_1, 1400);
+  tmc.writeRegister(A_1,  ACCEL);
+  tmc.writeRegister(V_1,  VELOCITY/2);
+  tmc.writeRegister(AMAX, ACCEL/2);
+  tmc.writeRegister(VMAX, VELOCITY);
+  tmc.writeRegister(DMAX, ACCEL/2);
+  //tmc.writeRegister(V_1,  VELOCITY);
+  tmc.writeRegister(D_1,  ACCEL);
   tmc.writeRegister(VSTOP, 10);
   tmc.writeRegister(TZEROWAIT, 0);
   tmc.writeRegister(RAMPMODE, 0);
-
-  // encoder
-  enc_setup();
 
   Serial.println("starting up");
 
@@ -66,18 +72,10 @@ bool dir = false;
 void loop()
 {
   uint32_t now = millis();
-  
-  // every n seconds or so...
-  if ( now - t_dirchange > 3000 )
-  {
-    t_dirchange = now;
-
-    // reverse direction
-    dir = !dir;
-    tmc.writeRegister(XTARGET, dir?(200*256):0);  // 1 full rotatation = 200s/rev * 256microsteps
-  }
 
   float enc = enc_read();
+
+  tmc.writeRegister(XTARGET, 200*enc*4);
 
   // print out current position
   if( now - t_echo > 100 )
